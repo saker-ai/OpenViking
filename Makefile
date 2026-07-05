@@ -1,173 +1,153 @@
-# Makefile for OpenViking
+# Makefile for OpenViking (Go)
 
-# Variables
-PYTHON ?= python3
-SETUP_PY := setup.py
-OV_CLI_DIR := crates/ov_cli
+GO ?= go
+GOWORK ?= off
+CMD_DIR := cmd
+BIN_DIR := bin
+SERVER := $(BIN_DIR)/openviking-server
+OV := $(BIN_DIR)/ov
+VIKINGBOT := $(BIN_DIR)/vikingbot
+MIGRATE := $(BIN_DIR)/openviking-migrate
+DOCTOR := $(BIN_DIR)/openviking-doctor
 
-# Dependency Versions
-MIN_PYTHON_VERSION := 3.10
-MIN_CMAKE_VERSION := 3.12
-MIN_RUST_VERSION := 1.91.1
-MIN_GCC_VERSION := 9
-MIN_CLANG_VERSION := 11
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+PKG := github.com/volcengine/openviking/internal/version
+LDFLAGS := -ldflags="-s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).BuildTime=$(BUILD_TIME)"
 
-# Output directories to clean
-CLEAN_DIRS := \
-	build/ \
-	dist/ \
-	*.egg-info/ \
-	openviking/bin/ \
-	openviking/lib/ \
-	openviking/web_studio/dist/ \
-	$(OV_CLI_DIR)/target/ \
-	src/cmake_build/ \
-	.pytest_cache/ \
-	.coverage \
-	htmlcov/ \
-	**/__pycache__/
+GOFLAGS := -trimpath
+CGO_ENABLED ?= 0
 
-.PHONY: all build clean help check-pip check-deps
-.PHONY: build-cli build-studio
+# Web-studio (frontend) paths. WEB_STUDIO_DIR defaults to the on-disk
+# web-studio/dist produced by `pnpm build`; the server reads it via
+# OPENVIKING_WEB_STUDIO_DIR env (mirrors the Python gate in app.py:659).
+WEB_STUDIO_DIR ?= $(CURDIR)/web-studio/dist
+SERVER_HOST ?= 127.0.0.1
+SERVER_PORT ?= 1933
+SERVER_URL := http://$(SERVER_HOST):$(SERVER_PORT)
+
+# Config file for `make run`. Defaults to the local-memory smoke config;
+# callers can override with OV_CONFIG=/path/to/ov.conf.
+OV_CONFIG ?= $(CURDIR)/examples/ov.conf.local-memory
+
+.PHONY: all build test test-short test-integration test-e2e bench lint cover tidy fmt vet docker dev run run-server open-browser clean web-studio web-studio-install help
 
 all: build
 
-help:
-	@echo "Available targets:"
-	@echo "  build           - Build ragfs-python and C++ extensions using setup.py"
-	@echo "  build-cli       - Build Rust CLI (ov) in development mode (fast) and copy to openviking/bin/"
-	@echo "  build-studio    - Build web-studio SPA and copy into openviking/web_studio/dist/"
-	@echo "  clean           - Remove build artifacts and temporary files"
-	@echo "  check-deps      - Check if required dependencies (Rust, CMake, etc.) are installed"
-	@echo "  help            - Show this help message"
+build: web-studio
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(SERVER) ./$(CMD_DIR)/openviking-server
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(OV) ./$(CMD_DIR)/ov
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(VIKINGBOT) ./$(CMD_DIR)/vikingbot
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(MIGRATE) ./$(CMD_DIR)/openviking-migrate
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DOCTOR) ./$(CMD_DIR)/openviking-doctor
 
-check-pip:
-	@if command -v uv > /dev/null 2>&1 && uv pip --help > /dev/null 2>&1; then \
-		echo "  [OK] uv pip found"; \
-	elif $(PYTHON) -m pip --version > /dev/null 2>&1; then \
-		echo "  [OK] pip found"; \
+web-studio-install:
+	@if [ -d web-studio ] && [ -f web-studio/package.json ]; then \
+		cd web-studio && pnpm install --ignore-workspace; \
 	else \
-		echo "Error: Neither uv pip nor pip found for $(PYTHON)."; \
-		echo "Try fixing your environment by running:"; \
-		echo "  uv sync          # if using uv"; \
-		echo "  or"; \
-		echo "  $(PYTHON) -m ensurepip --upgrade"; \
-		exit 1; \
+		echo "  [SKIP] web-studio not found"; \
 	fi
 
-check-deps:
-	@echo "Checking dependencies..."
-	@# Python check
-	@$(PYTHON) -c "import sys; v=sys.version_info; exit(0 if v.major > 3 or (v.major == 3 and v.minor >= 10) else 1)" || (echo "Error: Python >= $(MIN_PYTHON_VERSION) is required."; exit 1)
-	@echo "  [OK] Python $$( $(PYTHON) -V | cut -d' ' -f2 )"
-	@# CMake check
-	@command -v cmake > /dev/null 2>&1 || (echo "Error: CMake is not installed."; exit 1)
-	@CMAKE_VER=$$(cmake --version | head -n1 | awk '{print $$3}'); \
-	$(PYTHON) -c "v='$$CMAKE_VER'.split('.'); exit(0 if int(v[0]) > 3 or (int(v[0]) == 3 and int(v[1]) >= 12) else 1)" || (echo "Error: CMake >= $(MIN_CMAKE_VERSION) is required. Found $$CMAKE_VER"; exit 1); \
-	echo "  [OK] CMake $$CMAKE_VER"
-	@# Rust check
-	@command -v rustc > /dev/null 2>&1 || (echo "Error: Rust is not installed."; exit 1)
-	@RUST_VER=$$(rustc --version | awk '{print $$2}'); \
-	$(PYTHON) -c "import sys; parse=lambda v: tuple(int(x) for x in v.split('.')); raise SystemExit(0 if parse(sys.argv[1]) >= parse(sys.argv[2]) else 1)" "$$RUST_VER" "$(MIN_RUST_VERSION)" || (echo "Error: Rust >= $(MIN_RUST_VERSION) is required. Found $$RUST_VER"; exit 1); \
-	echo "  [OK] Rust $$RUST_VER"
-	@# C++ Compiler check
-	@if command -v clang++ > /dev/null 2>&1; then \
-		CLANG_VER_FULL=$$(clang++ --version | head -n1 | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -n1); \
-		CLANG_VER=$$(echo $$CLANG_VER_FULL | cut -d. -f1); \
-		if [ $$CLANG_VER -lt $(MIN_CLANG_VERSION) ]; then echo "Error: Clang >= $(MIN_CLANG_VERSION) is required. Found $$CLANG_VER_FULL"; exit 1; fi; \
-		echo "  [OK] Clang $$CLANG_VER_FULL"; \
-	elif command -v g++ > /dev/null 2>&1; then \
-		GCC_VER_FULL=$$(g++ -dumpversion); \
-		GCC_VER=$$(echo $$GCC_VER_FULL | cut -d. -f1); \
-		if [ $$GCC_VER -lt $(MIN_GCC_VERSION) ]; then echo "Error: GCC >= $(MIN_GCC_VERSION) is required. Found $$GCC_VER_FULL"; exit 1; fi; \
-		echo "  [OK] GCC $$GCC_VER_FULL"; \
+web-studio:
+	@if [ -d web-studio ] && [ -f web-studio/package.json ]; then \
+		cd web-studio && (pnpm install --frozen-lockfile --ignore-workspace 2>/dev/null || pnpm install --ignore-workspace) && pnpm build; \
 	else \
-		echo "Error: C++ compiler (GCC or Clang) is required."; exit 1; \
+		echo "  [SKIP] web-studio not found, embedding empty asset"; \
 	fi
 
-build: check-deps check-pip build-studio
-	@echo "Starting build process via setup.py..."
-	$(PYTHON) $(SETUP_PY) build_ext --inplace
-	@if command -v uv > /dev/null 2>&1 && uv pip --help > /dev/null 2>&1; then \
-		echo "  [OK] uv pip found, use uv pip to install..."; \
-		uv pip install -e .; \
+test:
+	GOWORK=$(GOWORK) $(GO) test -race -cover -coverprofile=coverage.out ./...
+
+test-short:
+	GOWORK=$(GOWORK) $(GO) test -short -race ./...
+
+test-integration:
+	GOWORK=$(GOWORK) $(GO) test -tags=integration -race ./...
+
+test-e2e:
+	GOWORK=$(GOWORK) $(GO) test -tags=e2e -race ./...
+
+bench:
+	GOWORK=$(GOWORK) $(GO) test -bench=. -benchmem -run=^$$ ./...
+
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run ./... || echo "golangci-lint not installed, skipping"
+
+cover:
+	GOWORK=$(GOWORK) $(GO) tool cover -html=coverage.out -o coverage.html
+
+tidy:
+	GOWORK=$(GOWORK) $(GO) mod tidy
+
+docker:
+	docker build -t openviking:dev .
+
+dev:
+	GOWORK=$(GOWORK) $(GO) run ./$(CMD_DIR)/openviking-server
+
+# run-server starts the OpenViking server with the local-memory smoke
+# config + web-studio static assets. Use `make run` for the full
+# frontend+backend experience; this target is for callers who already
+# built the frontend and just want the server.
+run-server: web-studio
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) -o $(SERVER) ./$(CMD_DIR)/openviking-server
+	OPENVIKING_WEB_STUDIO_DIR=$(WEB_STUDIO_DIR) $(SERVER) --config $(OV_CONFIG)
+
+# open-browser opens the default browser to the web-access entry point.
+# Detects xdg-open (Linux), open (macOS), and start (Windows).
+open-browser:
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open $(SERVER_URL)/web-access; \
+	elif command -v open >/dev/null 2>&1; then \
+		open $(SERVER_URL)/web-access; \
+	elif command -v start >/dev/null 2>&1; then \
+		start $(SERVER_URL)/web-access; \
 	else \
-		echo "  [OK] pip found, use pip to install..."; \
-		$(PYTHON) -m pip install -e .; \
+		echo "  [WARN] no browser opener found; open $(SERVER_URL)/web-access manually"; \
 	fi
-	@echo "Building ragfs-python (Rust RAGFS binding) into openviking/lib/..."
-	@MATURIN_CMD=""; \
-	if command -v maturin > /dev/null 2>&1; then \
-		MATURIN_CMD=maturin; \
-	elif command -v uv > /dev/null 2>&1 && uv pip --help > /dev/null 2>&1; then \
-		uv pip install maturin && MATURIN_CMD=maturin; \
-	fi; \
-	if [ -n "$$MATURIN_CMD" ]; then \
-		TMPDIR=$$(mktemp -d); \
-		cd crates/ragfs-python && $$MATURIN_CMD build --release --out "$$TMPDIR" 2>&1; \
-		cd ../..; \
-		mkdir -p openviking/lib; \
-		rm -f openviking/lib/ragfs_python*.so openviking/lib/ragfs_python*.pyd openviking/lib/ragfs_python*.dylib; \
-		echo "import zipfile, glob, shutil, os, sys" > /tmp/extract_ragfs.py; \
-		echo "whls = glob.glob(os.path.join('$$TMPDIR', 'ragfs_python-*.whl'))" >> /tmp/extract_ragfs.py; \
-		echo "assert whls, 'maturin produced no wheel'" >> /tmp/extract_ragfs.py; \
-		echo "with zipfile.ZipFile(whls[0]) as zf:" >> /tmp/extract_ragfs.py; \
-		echo "    for name in zf.namelist():" >> /tmp/extract_ragfs.py; \
-		echo "        bn = os.path.basename(name)" >> /tmp/extract_ragfs.py; \
-		echo "        if bn.startswith('ragfs_python.abi3.') and (bn.endswith('.so') or bn.endswith('.pyd')):" >> /tmp/extract_ragfs.py; \
-		echo "            dst = os.path.join('openviking', 'lib', bn)" >> /tmp/extract_ragfs.py; \
-		echo "            with zf.open(name) as src, open(dst, 'wb') as f: f.write(src.read())" >> /tmp/extract_ragfs.py; \
-		echo "            os.chmod(dst, 0o755)" >> /tmp/extract_ragfs.py; \
-		echo "            print(f'  [OK] ragfs-python: extracted {bn} -> {dst}')" >> /tmp/extract_ragfs.py; \
-		echo "            sys.exit(0)" >> /tmp/extract_ragfs.py; \
-		echo "print('[Warning] No ragfs_python abi3 .so/.pyd found in wheel')" >> /tmp/extract_ragfs.py; \
-		echo "sys.exit(1)" >> /tmp/extract_ragfs.py; \
-		$(PYTHON) /tmp/extract_ragfs.py; \
-		rm -f /tmp/extract_ragfs.py; \
-		rm -rf "$$TMPDIR"; \
-	else \
-		echo "  [SKIP] maturin not found, ragfs-python (Rust binding) will not be built."; \
-		echo "         Install maturin to enable: uv pip install maturin"; \
-	fi
-	@echo "Build completed successfully."
+
+# run starts the backend (with web-studio static assets wired via
+# OPENVIKING_WEB_STUDIO_DIR) and opens the browser to /web-access. The
+# server runs in the foreground; Ctrl-C stops it. Backend build is
+# skipped when the binary is up to date. The frontend is built on first
+# run and reused afterwards — drop into web-studio/ and run `pnpm dev`
+# separately for hot-reload during frontend work.
+run: run-server
+	@echo "OpenViking server started at $(SERVER_URL)"
+	@echo "Opening browser to $(SERVER_URL)/web-access ..."
+	@$(MAKE) --no-print-directory open-browser
+	@echo "Server is running in the foreground. Press Ctrl-C to stop."
 
 clean:
-	@echo "Cleaning up build artifacts..."
-	@for dir in $(CLEAN_DIRS); do \
-		if [ -d "$$dir" ] || [ -f "$$dir" ]; then \
-			echo "Removing $$dir"; \
-			rm -rf $$dir; \
-		fi \
-	done
-	@find . -name "*.pyc" -delete
-	@find . -name "__pycache__" -type d -exec rm -rf {} +
-	@echo "Cleanup completed."
+	rm -rf $(BIN_DIR) coverage.out coverage.html
 
-# Web Studio target
-build-studio:
-	@if [ "$$OV_SKIP_STUDIO_BUILD" = "1" ]; then \
-		echo "  [SKIP] web-studio build disabled by OV_SKIP_STUDIO_BUILD=1"; \
-	elif [ -f openviking/web_studio/dist/index.html ]; then \
-		echo "  [OK] web-studio bundle already present"; \
-	elif ! command -v npm > /dev/null 2>&1; then \
-		echo "  [SKIP] npm not found; install Node.js to enable /studio"; \
-	elif [ ! -f web-studio/package.json ]; then \
-		echo "  [SKIP] web-studio source not found"; \
-	else \
-		echo "Building web-studio (Vite SPA)..."; \
-		cd web-studio && npm ci && npm run build -- --base="/studio/" && cd ..; \
-		mkdir -p openviking/web_studio; \
-		rm -rf openviking/web_studio/dist; \
-		cp -r web-studio/dist openviking/web_studio/dist; \
-		echo "  [OK] web-studio bundle copied to openviking/web_studio/dist/"; \
-	fi
+fmt:
+	GOWORK=$(GOWORK) $(GO) fmt ./...
 
-# Rust CLI targets
-build-cli:
-	@echo "Building Rust CLI (ov) in development mode..."
-	@cd $(OV_CLI_DIR) && cargo build
-	@mkdir -p openviking/bin
-	@cp target/debug/ov openviking/bin/ov
-	@chmod +x openviking/bin/ov
-	@echo "  [OK] CLI built at target/debug/ov"
-	@echo "  [OK] CLI copied to openviking/bin/ov"
+vet:
+	GOWORK=$(GOWORK) $(GO) vet ./...
+
+help:
+	@echo "OpenViking Go monorepo targets:"
+	@echo "  build           - Build all 5 binaries into bin/"
+	@echo "  run             - Build web-studio + server, start server, open browser to /web-access"
+	@echo "  run-server      - Build web-studio + server, start server (no browser)"
+	@echo "  open-browser    - Open browser to http://127.0.0.1:1933/web-access"
+	@echo "  web-studio      - Build web-studio frontend (pnpm install + build)"
+	@echo "  web-studio-install - pnpm install only (no build)"
+	@echo "  test            - Run all tests with race + coverage"
+	@echo "  test-short      - Run only short tests"
+	@echo "  test-integration- Run integration tests (requires docker)"
+	@echo "  test-e2e        - Run E2E tests"
+	@echo "  bench           - Run benchmarks"
+	@echo "  lint            - Run golangci-lint"
+	@echo "  cover           - Generate HTML coverage report"
+	@echo "  tidy            - go mod tidy"
+	@echo "  docker          - Build docker image"
+	@echo "  dev             - Run server in dev mode (no frontend build)"
+	@echo "  clean           - Remove build artifacts"
+	@echo "  fmt             - go fmt"
+	@echo "  vet             - go vet"

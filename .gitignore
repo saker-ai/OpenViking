@@ -216,3 +216,11 @@ tests/integration/.tmp_*/
 
 # LoopX local control-plane state
 .loopx/
+
+# Go build artifacts
+bin/
+coverage.out
+coverage.html
+*.test
+*.prof
+*.pprof

@@ -11,17 +11,22 @@ import (
 	openviking "github.com/volcengine/OpenViking/sdk/go"
 )
 
-const (
-	baseURL = "http://localhost:1940"
-	apiKey  = "" // Set this when your OpenViking server requires authentication.
-)
-
 func main() {
 	ctx := context.Background()
+
+	baseURL := os.Getenv("OPENVIKING_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:1940"
+	}
+	apiKey := os.Getenv("OPENVIKING_API_KEY")
+	account := os.Getenv("OPENVIKING_ACCOUNT")
+	user := os.Getenv("OPENVIKING_USER")
 
 	client, err := openviking.NewClient(openviking.Config{
 		BaseURL: baseURL,
 		APIKey:  apiKey,
+		Account: account,
+		User:    user,
 		Timeout: 120 * time.Second,
 	})
 	if err != nil {
@@ -337,6 +342,8 @@ func main() {
 	peerClient, err := openviking.NewClient(openviking.Config{
 		BaseURL:     baseURL,
 		APIKey:      apiKey,
+		Account:     account,
+		User:        user,
 		ActorPeerID: peerID,
 		Timeout:     120 * time.Second,
 	})

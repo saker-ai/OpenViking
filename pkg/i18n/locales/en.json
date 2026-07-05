@@ -1,0 +1,23 @@
+{
+  "hello": {
+    "other": "Hello"
+  },
+  "ov.init.welcome": {
+    "other": "Welcome to OpenViking CLI setup"
+  },
+  "ov.add_resource.added": {
+    "other": "Resource added: {{.path}}"
+  },
+  "ov.search.no_results": {
+    "other": "No results"
+  },
+  "ov.doctor.connectivity_ok": {
+    "other": "Connectivity OK"
+  },
+  "ov.doctor.connectivity_failed": {
+    "other": "Connectivity check failed: {{.err}}"
+  },
+  "ov.auth.token_cached": {
+    "other": "Token cached at {{.path}}"
+  }
+}

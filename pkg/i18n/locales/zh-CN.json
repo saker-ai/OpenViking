@@ -1,0 +1,23 @@
+{
+  "hello": {
+    "other": "你好"
+  },
+  "ov.init.welcome": {
+    "other": "欢迎使用 OpenViking CLI 配置向导"
+  },
+  "ov.add_resource.added": {
+    "other": "资源已添加: {{.path}}"
+  },
+  "ov.search.no_results": {
+    "other": "无结果"
+  },
+  "ov.doctor.connectivity_ok": {
+    "other": "连接正常"
+  },
+  "ov.doctor.connectivity_failed": {
+    "other": "连接检查失败: {{.err}}"
+  },
+  "ov.auth.token_cached": {
+    "other": "令牌已缓存到 {{.path}}"
+  }
+}

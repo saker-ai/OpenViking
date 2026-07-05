@@ -1,0 +1,84 @@
+# OpenViking local-memory E2E config.
+#
+# Zero external dependencies: in-memory vectordb, hash-fallback local
+# embedder, in-memory ragfs, in-memory queue. Use for layer-2 E2E smoke
+# tests (see scripts/e2e-smoke.sh) and local dev.
+#
+# Semantic search will NOT produce meaningful similarities — the hash
+# embedder is deterministic but not a real model. Tests that need real
+# similarity must configure a sidecar URL (OV_EMBEDDER_API_BASE).
+#
+# Usage:
+#   ./bin/openviking-server --config examples/ov.conf.local-memory
+#   curl -fsS http://127.0.0.1:1933/health
+
+server:
+  host: "127.0.0.1"
+  port: 1933
+  cors:
+    enabled: true
+    allow_origins: ["*"]
+  api_keys_path: ""  # empty disables on-disk apikey store
+  temp_upload:
+    mode: local
+  local_input_guard:
+    allowed_roots: ["./data/", "./tmp/", "/tmp/"]
+
+vectordb:
+  backend: memory
+  collection_prefix: "e2e_"
+
+ragfs:
+  cache:
+    provider: memory
+  multi_write:
+    sync: true
+  redirect:
+    file_over_size: 10485760  # 10 MiB
+
+embedder:
+  provider: local
+  dim: 64  # small for fast tests; hash fallback produces 64-dim vectors
+
+rerank:
+  provider: cohere
+  top_n: 5
+
+auth:
+  api_key:
+    enabled: false
+  oauth: false
+
+oauth:
+  issuer: ""
+
+otel:
+  exporter: memory
+  service_name: "openviking-server-e2e"
+  sample_rate: 1.0
+  log_level: info
+
+bot:
+  enabled: false
+
+queue:
+  backend: memory
+  concurrent: 4
+
+parse:
+  feishu:
+    domain: "https://open.feishu.cn"
+
+prompts:
+  dir: ""  # use embedded template archive
+
+# Dashscope/Volcengine environment variables (from ~/.bashrc):
+#   DASHSCOPE_API_KEY     -> vlm.api_key / embedder.api_key / rerank.api_key
+#   DASHSCOPE_BASE_URL    -> vlm.api_base / embedder.api_base / rerank.api_base
+#   SAKER_MODEL_BASE_URL  -> vlm.api_base (anthropic-compat endpoint, takes precedence)
+#   ANTHROPIC_BASE_URL    -> vlm.api_base (fallback)
+#   VOLCENGINE_ACCESS_KEY -> vectordb.vikingdb.access_key / vectordb.volcengine.api_key
+#   VOLCENGINE_SECRET_KEY -> vectordb.vikingdb.secret_key
+#   VOLCENGINE_REGION     -> vectordb.vikingdb.region
+# Set any of these in your shell to enable real dashscope/volcengine backends
+# without writing credentials to disk.
