@@ -53,6 +53,10 @@ func RegisterAdmin(g *gin.RouterGroup, deps *Deps) {
 	r.DELETE("/accounts/:id/users/:user_id", removeAccountUser(deps))
 	r.PUT("/accounts/:id/users/:user_id/role", setAccountUserRole(deps))
 	r.POST("/accounts/:id/users/:user_id/regenerate_key", regenerateAccountUserKey(deps))
+	// SDK-compat alias: web-studio's admin SDK calls POST /key (not
+	// /regenerate_key). Register both paths so the Python-era SDK and the
+	// Go SDK both work without a client rewrite.
+	r.POST("/accounts/:id/users/:user_id/key", regenerateAccountUserKey(deps))
 	r.POST("/migrate", adminMigrate(deps))
 }
 

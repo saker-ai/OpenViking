@@ -465,3 +465,49 @@ func jsonBody(s string) *bytes.Reader {
 
 // bytes is imported via the helper above.
 var _ = ragfs.Normalize
+
+// TestConsole_BFFDisabledEndpoints verifies the four SDK BFF endpoints
+// (dashboard/summary, tokens, context-commits, audit) return 200 with
+// enabled=false when no usage-audit store is wired. Studio renders the
+// "disabled" banner from this shape instead of crashing on a 404.
+func TestConsole_BFFDisabledEndpoints(t *testing.T) {
+	r := newTestRouter(t, newTestDeps(t))
+	cases := []struct {
+		path string
+	}{
+		{"/api/v1/console/dashboard/summary"},
+		{"/api/v1/console/tokens?start_date=2026-07-01&end_date=2026-07-05"},
+		{"/api/v1/console/context-commits?start_date=2026-07-01&end_date=2026-07-05"},
+		{"/api/v1/console/audit"},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(http.MethodGet, c.path, nil)
+		req.Header.Set(identity.HeaderAccount, "acct")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "path %s: %s", c.path, rec.Body.String())
+		var body struct {
+			Status  string `json:"status"`
+			Result  struct {
+				Enabled bool   `json:"enabled"`
+				Message string `json:"message"`
+			} `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.Equal(t, "ok", body.Status)
+		assert.False(t, body.Result.Enabled, "path %s: expected enabled=false", c.path)
+	}
+}
+
+// TestConsole_TokensRequiresDateRange verifies /console/tokens returns 422
+// when start_date or end_date is missing. Studio's home page always sends
+// both; the guard prevents a malformed SDK call from getting an empty
+// series back.
+func TestConsole_TokensRequiresDateRange(t *testing.T) {
+	r := newTestRouter(t, newTestDeps(t))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/console/tokens", nil)
+	req.Header.Set(identity.HeaderAccount, "acct")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+}

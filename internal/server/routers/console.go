@@ -2,7 +2,9 @@ package routers
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +22,11 @@ import (
 // The collection endpoints delegate to vectordb.CollectionAdapter. Mount
 // endpoints delegate to ragfs.MountableFS when the configured RAGFS is a
 // mountable. Health pings every mounted backend.
+//
+// SDK BFF endpoints (Python openviking/server/routers/console.py): the
+// dashboard / tokens / context-commits / audit endpoints return
+// {enabled:false,message:...} when usage-audit is not configured so the
+// Studio UI degrades gracefully instead of 404.
 func RegisterConsole(g *gin.RouterGroup, deps *Deps) {
 	r := g.Group("/console")
 	r.GET("/collections", consoleListCollections(deps))
@@ -29,6 +36,183 @@ func RegisterConsole(g *gin.RouterGroup, deps *Deps) {
 	r.POST("/collections/:name/upsert", consoleUpsert(deps))
 	r.POST("/collections/:name/search", consoleSearch(deps))
 	r.POST("/collections/:name/delete", consoleDelete(deps))
+	// SDK BFF endpoints consumed by web-studio home + request-logs pages.
+	r.GET("/dashboard/summary", consoleDashboardSummary(deps))
+	r.GET("/tokens", consoleTokens(deps))
+	r.GET("/context-commits", consoleContextCommits(deps))
+	r.GET("/audit", consoleAudit(deps))
+}
+
+// disabledUsageAudit is the standard payload returned by console BFF
+// endpoints when no usage-audit store is wired. Mirrors Python's
+// OvMaybeDisabled model — Studio renders the "disabled" banner instead of
+// crashing on a 404.
+func disabledUsageAudit() gin.H {
+	return gin.H{
+		"enabled": false,
+		"message": "usage audit not configured; set ov.usage_audit.enabled=true",
+	}
+}
+
+// consoleDashboardSummary handles GET /console/dashboard/summary — today's
+// retrieval / token / context counts. Returns OvMaybeDisabled when usage
+// audit is not wired.
+func consoleDashboardSummary(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"enabled":  false,
+			"message":  "usage audit not configured",
+			"context_counts": gin.H{
+				"total":   0,
+				"files":   0,
+				"memories": 0,
+				"skills":  0,
+			},
+			"today_retrievals": gin.H{
+				"total":  0,
+				"search": 0,
+				"find":   0,
+			},
+			"today_tokens": gin.H{
+				"total":            0,
+				"vlm_input":        0,
+				"vlm_output":       0,
+				"embedding_input":  0,
+			},
+		}))
+	}
+}
+
+// consoleTokens handles GET /console/tokens — daily token series for the
+// requested date range. Requires start_date and end_date query params.
+func consoleTokens(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := c.Query("start_date")
+		end := c.Query("end_date")
+		if start == "" || end == "" {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422,
+				"start_date and end_date are required (YYYY-MM-DD)"))
+			return
+		}
+		items := buildEmptyTokenSeries(start, end)
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"enabled":    false,
+			"message":    "usage audit not configured",
+			"start_date": start,
+			"end_date":   end,
+			"bucket":     defaultIfEmpty(c.Query("bucket"), "day"),
+			"items":      items,
+		}))
+	}
+}
+
+// consoleContextCommits handles GET /console/context-commits — hourly /
+// 4-hour bucketed context commit counts for the requested date range.
+func consoleContextCommits(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := c.Query("start_date")
+		end := c.Query("end_date")
+		if start == "" || end == "" {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422,
+				"start_date and end_date are required (YYYY-MM-DD)"))
+			return
+		}
+		items := buildEmptyContextCommitSeries(start, end, defaultIfEmpty(c.Query("bucket"), "hour"))
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"enabled":    false,
+			"message":    "usage audit not configured",
+			"start_date": start,
+			"end_date":   end,
+			"bucket":     defaultIfEmpty(c.Query("bucket"), "hour"),
+			"items":      items,
+		}))
+	}
+}
+
+// consoleAudit handles GET /console/audit — paginated audit log entries.
+// Returns an empty page with OvMaybeDisabled when usage audit is not
+// configured so Studio's request-logs page renders the disabled state.
+func consoleAudit(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _ := strconv.Atoi(c.Query("page"))
+		if page <= 0 {
+			page = 1
+		}
+		pageSize, _ := strconv.Atoi(c.Query("page_size"))
+		if pageSize <= 0 {
+			pageSize = 10
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"enabled":     false,
+			"message":     "usage audit not configured",
+			"items":       []any{},
+			"page":        page,
+			"page_size":   pageSize,
+			"total":       0,
+			"success_rate": 0,
+		}))
+	}
+}
+
+// defaultIfEmpty returns v when non-empty, else fallback.
+func defaultIfEmpty(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+// buildEmptyTokenSeries returns one zero-valued item per day in [start, end].
+// Studio's token-trend-panel expects a point per day to render the chart.
+func buildEmptyTokenSeries(start, end string) []gin.H {
+	out := []gin.H{}
+	startT, err1 := time.Parse("2006-01-02", start)
+	endT, err2 := time.Parse("2006-01-02", end)
+	if err1 != nil || err2 != nil || endT.Before(startT) {
+		return out
+	}
+	for d := startT; !d.After(endT); d = d.AddDate(0, 0, 1) {
+		out = append(out, gin.H{
+			"date":             d.Format("2006-01-02"),
+			"total":            0,
+			"vlm_input":        0,
+			"vlm_output":       0,
+			"embedding_input":  0,
+		})
+	}
+	return out
+}
+
+// buildEmptyContextCommitSeries returns one zero-valued item per bucket in
+// [start, end]. Bucket is "hour" or "4h"; default is hourly. Each item
+// carries date + hour fields so the heatmap renders.
+func buildEmptyContextCommitSeries(start, end, bucket string) []gin.H {
+	out := []gin.H{}
+	startT, err1 := time.Parse("2006-01-02", start)
+	endT, err2 := time.Parse("2006-01-02", end)
+	if err1 != nil || err2 != nil || endT.Before(startT) {
+		return out
+	}
+	step := time.Hour
+	if bucket == "4h" {
+		step = 4 * time.Hour
+	}
+	// End-of-day for endT so the range is inclusive of the last day.
+	for d := startT; !d.After(endT.AddDate(0, 0, 1)); d = d.Add(step) {
+		out = append(out, gin.H{
+			"date":                  d.Format("2006-01-02"),
+			"hour":                  d.Hour(),
+			"total":                 0,
+			"session_commit":        0,
+			"session_add_message":   0,
+			"add_resource":          0,
+			"add_skill":             0,
+		})
+	}
+	return out
 }
 
 // mountable returns the *ragfs.MountableFS when deps.RAGFS is one. The

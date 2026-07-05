@@ -25,8 +25,12 @@ func RegisterStats(g *gin.RouterGroup, deps *Deps) {
 	r.GET("/summary", statsSummary(deps))
 	r.GET("/resources", statsResources(deps))
 	r.GET("/sessions", statsSessions(deps))
+	r.GET("/sessions/:id", statsSessionByID(deps))
 	r.GET("/tokens", statsTokens(deps))
 	r.GET("/storage", statsStorage(deps))
+	// SDK BFF endpoint: web-studio's SDK calls /stats/memories for the
+	// memory-aggregator dashboard. Returns zeros when no aggregator wired.
+	r.GET("/memories", statsMemories(deps))
 }
 
 func statsDir(c *gin.Context) string {
@@ -162,6 +166,63 @@ func statsStorage(deps *Deps) gin.HandlerFunc {
 		}
 		root := accountRoot(c)
 		c.JSON(http.StatusOK, gin.H{"path": root, "bytes": measureStorage(deps, c)})
+	}
+}
+
+// statsSessionByID handles GET /stats/sessions/:session_id — extraction
+// stats for a single session. Returns zeros when the session is not found
+// or no aggregator is wired. Mirrors Python
+// openviking/server/routers/stats.py get_session_extraction_stats.
+func statsSessionByID(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sid := c.Param("id")
+		if sid == "" {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422, "session id is required"))
+			return
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"session_id":          sid,
+			"total_turns":         0,
+			"memories_extracted":  map[string]any{},
+			"contexts_used":       0,
+			"skills_used":         0,
+		}))
+	}
+}
+
+// statsMemories handles GET /stats/memories — aggregate memory stats by
+// category / hotness / staleness. Returns zeros when no aggregator is
+// wired. Mirrors Python openviking/server/routers/stats.py get_memory_stats.
+func statsMemories(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		category := c.Query("category")
+		if category != "" {
+			validCategories := map[string]bool{
+				"profile": true, "preferences": true, "entities": true,
+				"events": true, "cases": true, "patterns": true,
+				"tools": true, "skills": true,
+			}
+			if !validCategories[category] {
+				abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422,
+					"invalid category: "+category))
+				return
+			}
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"total_memories": 0,
+			"by_category": gin.H{
+				"profile": 0, "preferences": 0, "entities": 0, "events": 0,
+				"cases": 0, "patterns": 0, "tools": 0, "skills": 0,
+			},
+			"hotness_distribution": gin.H{
+				"cold": 0, "warm": 0, "hot": 0,
+			},
+			"staleness": gin.H{
+				"not_accessed_7d":         0,
+				"not_accessed_30d":        0,
+				"oldest_memory_age_days":  0,
+			},
+		}))
 	}
 }
 

@@ -33,6 +33,12 @@ func RegisterBot(r *gin.Engine, deps *Deps) {
 		g.GET("/sessions/:id", botUnsupported)
 		g.GET("/channels", botUnsupported)
 		g.GET("/health", botUnsupported)
+		// SDK BFF endpoints: web-studio's playground calls /chat and
+		// /chat/stream to talk to vikingbot. When no bot is wired they
+		// return 501 UNSUPPORTED (mirrors the rest of this block).
+		g.POST("/chat", botUnsupported)
+		g.POST("/chat/stream", botUnsupported)
+		g.POST("/feedback", botUnsupported)
 		return
 	}
 	bot := deps.Bot
@@ -42,6 +48,9 @@ func RegisterBot(r *gin.Engine, deps *Deps) {
 	g.GET("/sessions/:id", bot.GetSession)
 	g.GET("/channels", bot.ListChannels)
 	g.GET("/health", bot.Health)
+	g.POST("/chat", bot.Chat)
+	g.POST("/chat/stream", bot.ChatStream)
+	g.POST("/feedback", bot.Feedback)
 }
 
 // botUnsupported is the nil-safe fallback for /bot/v1/* routes. It

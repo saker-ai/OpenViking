@@ -212,6 +212,39 @@ func (g *Gateway) Health(c *gin.Context) {
 	})
 }
 
+// Chat handles POST /bot/v1/chat — send a message to the vikingbot agent
+// and return a single response. The vikingbot agent runtime lives in a
+// separate process (cmd/vikingbot); the gateway does not embed an agent,
+// so this endpoint returns 501 UNSUPPORTED until an agent runtime is
+// injected via WithAgent (TODO: P9). The route is registered so web-studio's
+// playground chat input doesn't 404 — callers get a structured error
+// envelope they can surface as "bot not configured".
+func (g *Gateway) Chat(c *gin.Context) {
+	abortWithError(c, domain.NewAppError(domain.CodeUnsupported, http.StatusNotImplemented,
+		"bot: chat runtime not configured"))
+}
+
+// ChatStream handles POST /bot/v1/chat/stream — Server-Sent Events stream
+// for a chat turn. Sets the SSE headers before returning 501 so the response
+// shape matches the streaming contract; the error middleware still renders
+// the structured envelope as the body's first (and only) event.
+func (g *Gateway) ChatStream(c *gin.Context) {
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	abortWithError(c, domain.NewAppError(domain.CodeUnsupported, http.StatusNotImplemented,
+		"bot: chat runtime not configured"))
+}
+
+// Feedback handles POST /bot/v1/feedback — submit a feedback payload
+// (thumbs-up/down, free-text) for a prior chat turn. The vikingbot
+// feedback store is not wired into the gateway; the route is registered
+// so the SDK call doesn't 404. Returns 501 UNSUPPORTED.
+func (g *Gateway) Feedback(c *gin.Context) {
+	abortWithError(c, domain.NewAppError(domain.CodeUnsupported, http.StatusNotImplemented,
+		"bot: feedback store not configured"))
+}
+
 // getChannel returns the adapter registered under name, or false. Safe
 // for concurrent use.
 func (g *Gateway) getChannel(name string) (ChannelAdapter, bool) {

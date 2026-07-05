@@ -2,6 +2,7 @@ package routers
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
@@ -60,11 +61,13 @@ func contentPath(c *gin.Context) string {
 // readContent handles GET /content/*uri — read bytes (default) or a hidden
 // sidecar layer (?layer=abstract|overview|chunks[:n]).
 //
-// SDK-compat dispatch: when the wildcard matches "/read" and a ?uri= query
-// param is present, the request is treated as the Go SDK's
-// GET /content/read?uri=... call and dispatched to readContentByQuery.
-// This dispatch is necessary because gin's radix tree doesn't allow
-// GET /*uri and GET /read to coexist as separate routes.
+// SDK-compat dispatch: when the wildcard matches "/read", "/abstract",
+// "/overview", or "/download" and a ?uri= query param is present, the
+// request is treated as the Go SDK's GET /content/<alias>?uri=... call and
+// dispatched to the matching handler. This dispatch is necessary because
+// gin's radix tree doesn't allow GET /*uri and GET /read to coexist as
+// separate routes. /download returns raw bytes with Content-Disposition;
+// the other aliases return the okResponse envelope.
 func readContent(deps *Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if deps == nil || deps.RAGFS == nil {
@@ -85,6 +88,11 @@ func readContent(deps *Deps) gin.HandlerFunc {
 		// SDK-compat dispatch: GET /content/overview?uri=...
 		if c.Param("uri") == "/overview" && c.Query("uri") != "" {
 			readOverviewByQuery(deps)(c)
+			return
+		}
+		// SDK-compat dispatch: GET /content/download?uri=... — returns blob.
+		if c.Param("uri") == "/download" && c.Query("uri") != "" {
+			downloadContentByQuery(deps)(c)
 			return
 		}
 		p := contentPath(c)
@@ -332,6 +340,38 @@ func readOverviewByQuery(deps *Deps) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, okResponse(s))
+	}
+}
+
+// downloadContentByQuery handles GET /content/download?uri=... — returns
+// the raw resource bytes with Content-Disposition: attachment so browsers
+// save the file. Mirrors Python openviking/server/routers/content.py
+// download_content. The filename is derived from the URI's last segment.
+func downloadContentByQuery(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.RAGFS == nil {
+			_ = c.Error(domain.ErrUnsupported)
+			c.Abort()
+			return
+		}
+		uri := c.Query("uri")
+		if uri == "" {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422, "uri is required"))
+			return
+		}
+		p := resolveContentURI(c, uri)
+		var buf bytes.Buffer
+		if err := deps.RAGFS.Read(c.Request.Context(), p, &buf); err != nil {
+			abortWithError(c, domain.Wrap(domain.CodeRAGFSError, 500, err))
+			return
+		}
+		filename := path.Base(p)
+		if filename == "" || filename == "/" || filename == "." {
+			filename = "download"
+		}
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, filename))
+		c.Data(http.StatusOK, "application/octet-stream", buf.Bytes())
 	}
 }
 

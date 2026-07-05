@@ -376,6 +376,12 @@ func BuildApp(cfg *config.Config) (*App, func(), error) {
 	// RFC 8414 / RFC 9728 .well-known endpoints live at the engine root.
 	routers.RegisterWellKnown(engine, deps)
 
+	// /openapi.json — live OpenAPI 3.0 spec enumerated from the gin route
+	// tree. Web-studio's `pnpm gen-server-client` reads this endpoint to
+	// regenerate its SDK so the SDK paths stay in sync with the Go server
+	// without a hand-maintained spec file.
+	registerOpenAPI(engine)
+
 	// MCP streamable HTTP transport at /mcp.
 	engine.Any("/mcp", gin.WrapH(mcpSrv.HTTPHandler()))
 

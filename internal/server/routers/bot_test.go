@@ -127,6 +127,23 @@ func (s *stubBotService) Health(c *gin.Context) {
 	})
 }
 
+func (s *stubBotService) Chat(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "stub chat response",
+		"session_id": c.Query("session_id"),
+		"timestamp":  "2026-01-01T00:00:00Z",
+	})
+}
+
+func (s *stubBotService) ChatStream(c *gin.Context) {
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	_, _ = c.Writer.Write([]byte("event: message\ndata: {\"message\":\"stub\"}\n\n"))
+}
+
+func (s *stubBotService) Feedback(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"received": true})
+}
+
 // TestBot_NilDepsReturns501 verifies that every /bot/v1/* route returns
 // 501 UNSUPPORTED when Deps.Bot is nil (server boots without a bot).
 func TestBot_NilDepsReturns501(t *testing.T) {
@@ -142,6 +159,9 @@ func TestBot_NilDepsReturns501(t *testing.T) {
 		{http.MethodGet, "/bot/v1/sessions/sess-1"},
 		{http.MethodGet, "/bot/v1/channels"},
 		{http.MethodGet, "/bot/v1/health"},
+		{http.MethodPost, "/bot/v1/chat"},
+		{http.MethodPost, "/bot/v1/chat/stream"},
+		{http.MethodPost, "/bot/v1/feedback"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
@@ -319,4 +339,56 @@ func TestBot_404UnknownRoute(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestBot_ChatDelegates verifies POST /bot/v1/chat delegates to
+// BotService.Chat and returns the stub response envelope.
+func TestBot_ChatDelegates(t *testing.T) {
+	svc := &stubBotService{}
+	r := newBotTestRouter(t, &Deps{Bot: svc})
+	body := bytes.NewBufferString(`{"message":"hi","session_id":"s1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/bot/v1/chat", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp struct {
+		Message   string `json:"message"`
+		SessionID string `json:"session_id"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "stub chat response", resp.Message)
+}
+
+// TestBot_ChatStreamDelegates verifies POST /bot/v1/chat/stream delegates
+// to BotService.ChatStream and emits an SSE frame.
+func TestBot_ChatStreamDelegates(t *testing.T) {
+	svc := &stubBotService{}
+	r := newBotTestRouter(t, &Deps{Bot: svc})
+	body := bytes.NewBufferString(`{"message":"hi","stream":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/bot/v1/chat/stream", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+	assert.Contains(t, rec.Body.String(), "event: message")
+}
+
+// TestBot_FeedbackDelegates verifies POST /bot/v1/feedback delegates to
+// BotService.Feedback.
+func TestBot_FeedbackDelegates(t *testing.T) {
+	svc := &stubBotService{}
+	r := newBotTestRouter(t, &Deps{Bot: svc})
+	body := bytes.NewBufferString(`{"rating":"up"}`)
+	req := httptest.NewRequest(http.MethodPost, "/bot/v1/feedback", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp struct {
+		Received bool `json:"received"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Received)
 }

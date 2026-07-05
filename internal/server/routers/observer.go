@@ -34,6 +34,27 @@ func RegisterObserver(g *gin.RouterGroup, deps *Deps) {
 	r.GET("/vikingdb", observerVikingDB(deps))
 	r.GET("/models", observerModels(deps))
 	r.GET("/system", observerSystem(deps))
+	// SDK BFF endpoints: web-studio's generated SDK calls /filesystem,
+	// /lock, /retrieval for the observer dashboard. Each returns the
+	// ComponentStatus shape {name, is_healthy, has_errors, status}.
+	r.GET("/filesystem", observerComponent("filesystem"))
+	r.GET("/lock", observerComponent("lock"))
+	r.GET("/retrieval", observerComponent("retrieval"))
+}
+
+// observerComponent returns a stubbed ComponentStatus for the named
+// observer subsystem. The Go server does not yet wire a runtime observer
+// for these components, so the status is reported as healthy + idle.
+// Mirrors Python openviking/server/routers/observer.py _component_to_dict.
+func observerComponent(name string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"name":       name,
+			"is_healthy": true,
+			"has_errors": false,
+			"status":     "idle",
+		}))
+	}
 }
 
 // observerQueue handles GET /observer/queue — return queuefs pending/

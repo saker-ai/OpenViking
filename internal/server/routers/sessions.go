@@ -45,6 +45,85 @@ func RegisterSessions(g *gin.RouterGroup, deps *Deps) {
 	// model has no separate archive ID (Archive just marks status=archived),
 	// so the archive_id param is ignored and the session itself is returned.
 	r.GET("/:id/archives/:archive_id", getSession(deps))
+	// SDK BFF endpoints consumed by web-studio sessions page. extract
+	// returns LLM-extracted memory; used records that certain contexts /
+	// skills were consumed in this session.
+	r.POST("/:id/extract", extractSession(deps))
+	r.POST("/:id/used", recordSessionUsed(deps))
+}
+
+// extractSession handles POST /sessions/:id/extract — run memory extraction
+// on the session and return the extracted memory list. Mirrors Python
+// openviking/server/routers/sessions.py extract_session. The result shape
+// is the same as listSessionMemory so the Studio sessions page can render
+// either endpoint's payload.
+func extractSession(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.Sessions == nil {
+			_ = c.Error(domain.ErrUnsupported)
+			c.Abort()
+			return
+		}
+		id, ok := sessionIdentityFromContext(c)
+		if !ok {
+			abortWithError(c, domain.NewAppError(domain.CodeUnauthorized, 401, "missing identity"))
+			return
+		}
+		sid := sessionIDParam(c)
+		if sid == "" || sid == "." {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422, "session id is required"))
+			return
+		}
+		mem, err := deps.Sessions.ExtractMemory(c.Request.Context(), id, sid)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				abortWithError(c, domain.Wrap(domain.CodeResourceNotFound, 404, err))
+				return
+			}
+			abortWithError(c, domain.Wrap(domain.CodeInternalError, 500, err))
+			return
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"session_id": sid,
+			"memory":     mem,
+		}))
+	}
+}
+
+// recordSessionUsed handles POST /sessions/:id/used — record that certain
+// contexts / skills were consumed by the session. Mirrors Python
+// sessions.py used_session. The current Store has no explicit "used" API,
+// so this is a best-effort no-op that returns the call's inputs back so
+// Studio's caller doesn't 404.
+func recordSessionUsed(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if deps == nil || deps.Sessions == nil {
+			_ = c.Error(domain.ErrUnsupported)
+			c.Abort()
+			return
+		}
+		id, ok := sessionIdentityFromContext(c)
+		if !ok {
+			abortWithError(c, domain.NewAppError(domain.CodeUnauthorized, 401, "missing identity"))
+			return
+		}
+		sid := sessionIDParam(c)
+		if sid == "" || sid == "." {
+			abortWithError(c, domain.NewAppError(domain.CodeValidationFailed, 422, "session id is required"))
+			return
+		}
+		var req struct {
+			Contexts []string `json:"contexts,omitempty"`
+			Skill    map[string]any `json:"skill,omitempty"`
+		}
+		_ = c.ShouldBindJSON(&req)
+		_ = id
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"session_id":    sid,
+			"contexts_used": req.Contexts,
+			"skills_used":   req.Skill,
+		}))
+	}
 }
 
 // sessionIdentityFromContext reads the caller identity from the request

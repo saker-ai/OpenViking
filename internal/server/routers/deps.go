@@ -196,4 +196,11 @@ type BotService interface {
 	ListChannels(c *gin.Context)
 	// Health reports the bot gateway health.
 	Health(c *gin.Context)
+	// Chat sends a message to the vikingbot agent and returns a single
+	// response. Used by web-studio's playground chat input.
+	Chat(c *gin.Context)
+	// ChatStream sends a message and returns an SSE stream of events.
+	ChatStream(c *gin.Context)
+	// Feedback submits a feedback payload for a prior chat turn.
+	Feedback(c *gin.Context)
 }

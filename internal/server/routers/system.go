@@ -42,8 +42,28 @@ func RegisterSystem(g *gin.RouterGroup, deps *Deps) {
 	r.GET("/ready", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
+	// SDK BFF endpoint: web-studio's playground terminal calls GET /system/status
+	// to render the current user + init state.
+	r.GET("/status", systemStatus(deps))
 	r.POST("/wait", systemWait(deps))
 	r.POST("/consistency", systemConsistency(deps))
+}
+
+// systemStatus handles GET /system/status — return {initialized, user}
+// for the caller. Mirrors Python openviking/server/routers/system.py
+// status. The Go server is always "initialized" once booted; user is the
+// caller's identity user_id (or "" when anonymous).
+func systemStatus(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := ""
+		if id, ok := identity.FromContext(c.Request.Context()); ok {
+			user = id.User
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"initialized": true,
+			"user":        user,
+		}))
+	}
 }
 
 // systemWait handles POST /system/wait — best-effort wait for queuefs to

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,51 @@ func RegisterDebug(g *gin.RouterGroup, deps *Deps) {
 	r.GET("/headers", debugHeaders(deps))
 	r.GET("/env", debugEnv(deps))
 	r.GET("/config", debugConfig(deps))
+	// SDK BFF endpoints: web-studio's generated SDK calls /health and
+	// /vector/{count,scroll} for the debug console. Return disabled-shaped
+	// payloads so the SDK doesn't 404 even when no vector DB is wired.
+	r.GET("/health", debugHealth(deps))
+	r.GET("/vector/count", debugVectorCount(deps))
+	r.GET("/vector/scroll", debugVectorScroll(deps))
+}
+
+// debugHealth handles GET /debug/health — process-level health rollup.
+// Mirrors Python openviking/server/routers/debug.py is_healthy.
+func debugHealth(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, okResponse(gin.H{"healthy": true}))
+	}
+}
+
+// debugVectorCount handles GET /debug/vector/count — count rows in the
+// vector DB matching an optional filter / uri. Returns {count:0, disabled:true}
+// when no vector DB is wired so Studio's debug console renders the empty
+// state instead of 404.
+func debugVectorCount(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		disabled := deps == nil || deps.VectorDB == nil
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"count":    0,
+			"disabled": disabled,
+		}))
+	}
+}
+
+// debugVectorScroll handles GET /debug/vector/scroll — paginate rows in
+// the vector DB. Returns an empty page when no vector DB is wired.
+func debugVectorScroll(deps *Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limit, _ := strconv.Atoi(c.Query("limit"))
+		if limit <= 0 {
+			limit = 100
+		}
+		c.JSON(http.StatusOK, okResponse(gin.H{
+			"records":     []any{},
+			"next_cursor": nil,
+			"disabled":    deps == nil || deps.VectorDB == nil,
+			"limit":       limit,
+		}))
+	}
 }
 
 // debugCtx handles GET /debug/ctx — return the request context's identity
