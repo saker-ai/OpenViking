@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -436,18 +438,56 @@ func versionHandler(c *gin.Context) {
 // studioHandler serves web-studio static assets from the configured
 // http.FileSystem. When fs is nil (no StudioPath configured) the handler
 // returns 501 UNSUPPORTED so the server still boots and the studio is
-// simply unavailable rather than crashing on every request. The handler
-// strips the /studio prefix so http.FileServer sees paths under root
-// (e.g. /studio/index.html -> /index.html).
+// simply unavailable rather than crashing on every request. When the
+// requested path maps to a real file on disk, the file is served
+// directly. When the path does not map to a file (e.g. /studio/home,
+// /studio/sessions), the handler falls back to serving index.html so
+// the SPA's client-side router can resolve the route — mirrors the
+// Python send_static_with_spa_fallback gate in openviking/server/app.py.
 func studioHandler(fs http.FileSystem) gin.HandlerFunc {
 	if fs == nil {
 		return func(c *gin.Context) {
 			abortWithError(c, domain.ErrUnsupported)
 		}
 	}
-	handler := http.StripPrefix("/studio", http.FileServer(fs))
+	fileServer := http.FileServer(fs)
 	return func(c *gin.Context) {
-		handler.ServeHTTP(c.Writer, c.Request)
+		original := c.Request.URL.Path
+		rel := strings.TrimPrefix(original, "/studio")
+		if rel == "" {
+			rel = "/"
+		}
+		// Real files (assets, favicon, etc.) are served via FileServer.
+		if f, err := fs.Open(rel); err == nil {
+			stat, _ := f.Stat()
+			_ = f.Close()
+			if stat != nil && !stat.IsDir() {
+				c.Request.URL.Path = rel
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				c.Request.URL.Path = original
+				return
+			}
+		}
+		// SPA fallback: serve index.html directly to avoid the
+		// /index.html → / redirect loop that http.FileServer enforces.
+		// Asset-like paths (with a file extension) MUST 404 when missing —
+		// otherwise the browser would try to evaluate index.html as JS/CSS.
+		if path.Ext(rel) != "" {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		f, err := fs.Open("/index.html")
+		if err != nil {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		defer f.Close()
+		stat, _ := f.Stat()
+		if stat == nil {
+			http.NotFound(c.Writer, c.Request)
+			return
+		}
+		http.ServeContent(c.Writer, c.Request, stat.Name(), stat.ModTime(), f)
 	}
 }
 

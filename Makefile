@@ -17,7 +17,9 @@ PKG := github.com/volcengine/openviking/internal/version
 LDFLAGS := -ldflags="-s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).BuildTime=$(BUILD_TIME)"
 
 GOFLAGS := -trimpath
-CGO_ENABLED ?= 0
+# go-tree-sitter (used by internal/parse/parsers/code) requires cgo for its
+# C bindings; CGO_ENABLED=0 excludes the cgo files and breaks the build.
+CGO_ENABLED ?= 1
 
 # Web-studio (frontend) paths. WEB_STUDIO_DIR defaults to the on-disk
 # web-studio/dist produced by `pnpm build`; the server reads it via
