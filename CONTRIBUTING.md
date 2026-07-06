@@ -629,8 +629,8 @@ By participating in this project, you agree to:
 
 If you have questions:
 
-- [GitHub Issues](https://github.com/volcengine/openviking/issues)
-- [Discussions](https://github.com/volcengine/openviking/discussions)
+- [GitHub Issues](https://github.com/saker-ai/ctxhub/issues)
+- [Discussions](https://github.com/saker-ai/ctxhub/discussions)
 
 ---
 

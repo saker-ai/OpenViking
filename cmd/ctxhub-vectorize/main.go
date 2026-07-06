@@ -1,11 +1,11 @@
-// Command openviking-vectorize is the offline batch vectorization
+// Command ctxhub-vectorize is the offline batch vectorization
 // service. It reads JSONL records ({id, text, metadata} per line),
 // batches them through the configured embedder, and upserts the
 // resulting vectors into the configured vectordb collection.
 //
 // Usage:
 //
-//	openviking-vectorize --config ov.conf --input docs.jsonl --collection my-docs --batch-size 64
+//	ctxhub-vectorize --config ov.conf --input docs.jsonl --collection my-docs --batch-size 64
 //
 // Input format (one JSON object per line):
 //
@@ -42,7 +42,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "openviking-vectorize:", err)
+		fmt.Fprintln(os.Stderr, "ctxhub-vectorize:", err)
 		os.Exit(1)
 	}
 }
@@ -79,7 +79,7 @@ func run() error {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	logger.Info("openviking-vectorize starting",
+	logger.Info("ctxhub-vectorize starting",
 		"input", *input,
 		"collection", *collection,
 		"batch_size", *batchSize,
@@ -112,7 +112,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("pipeline: %w (stats: %+v)", err, stats)
 	}
-	logger.Info("openviking-vectorize done",
+	logger.Info("ctxhub-vectorize done",
 		"records_read", stats.RecordsRead,
 		"records_upserted", stats.RecordsUpserted,
 		"batches", stats.Batches,
@@ -134,6 +134,6 @@ func newEmbedder(cfg config.EmbedderConfig) (embedder.Embedder, error) {
 	case "local":
 		return embedder.NewLocal(cfg, nil), nil
 	default:
-		return nil, fmt.Errorf("embedder: provider %q not supported by openviking-vectorize", cfg.Provider)
+		return nil, fmt.Errorf("embedder: provider %q not supported by ctxhub-vectorize", cfg.Provider)
 	}
 }

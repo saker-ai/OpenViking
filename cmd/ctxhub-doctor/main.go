@@ -1,4 +1,4 @@
-// Command openviking-doctor performs configuration, connectivity, model, and vectordb health checks.
+// Command ctxhub-doctor performs configuration, connectivity, model, and vectordb health checks.
 package main
 
 import (
@@ -15,7 +15,7 @@ func main() {
 		return
 	}
 	if err := doctor.NewRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "openviking-doctor:", err)
+		fmt.Fprintln(os.Stderr, "ctxhub-doctor:", err)
 		os.Exit(1)
 	}
 }

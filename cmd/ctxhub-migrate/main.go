@@ -1,4 +1,4 @@
-// Command openviking-migrate performs ovpack import/export and vectordb backend migrations.
+// Command ctxhub-migrate performs ovpack import/export and vectordb backend migrations.
 package main
 
 import (
@@ -15,7 +15,7 @@ func main() {
 		return
 	}
 	if err := migrate.NewRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "openviking-migrate:", err)
+		fmt.Fprintln(os.Stderr, "ctxhub-migrate:", err)
 		os.Exit(1)
 	}
 }

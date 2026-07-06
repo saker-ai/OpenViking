@@ -1,4 +1,4 @@
-// Command openviking-server is the Go reimplementation of the OpenViking
+// Command ctxhub-server is the Go reimplementation of the OpenViking
 // context database HTTP service. It exposes 24 REST routers, MCP streamable
 // HTTP, OAuth 2.1, WebDAV, Prometheus metrics, and embeds the Web Studio SPA.
 package main
@@ -25,7 +25,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "openviking-server:", err)
+		fmt.Fprintln(os.Stderr, "ctxhub-server:", err)
 		os.Exit(1)
 	}
 }
@@ -89,7 +89,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("openviking-server listening", "addr", srv.Addr, "version", version.Version)
+		slog.Info("ctxhub-server listening", "addr", srv.Addr, "version", version.Version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

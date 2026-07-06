@@ -558,8 +558,8 @@ Pythonのwheelパッケージのみをビルドし、公開はしません。
 
 質問がある場合：
 
-- [GitHub Issues](https://github.com/volcengine/openviking/issues)
-- [Discussions](https://github.com/volcengine/openviking/discussions)
+- [GitHub Issues](https://github.com/saker-ai/ctxhub/issues)
+- [Discussions](https://github.com/saker-ai/ctxhub/discussions)
 
 ---
 
