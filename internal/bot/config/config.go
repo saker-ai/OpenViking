@@ -26,7 +26,7 @@ type Config struct {
 	// be driven by a standalone config file.
 	Enabled bool `mapstructure:"enabled"`
 
-	// ServerURL is the base URL of the openviking-server the bot mounts
+	// ServerURL is the base URL of the ctxhub-server the bot mounts
 	// (e.g. https://openviking.example.com). Used by ovmount and
 	// heartbeat. Required when Enabled is true.
 	ServerURL string `mapstructure:"server_url" validate:"required_if=Enabled true"`
@@ -47,7 +47,7 @@ type Config struct {
 	// Agent configures the agent loop (system prompt, max iterations).
 	Agent AgentConfig `mapstructure:"agent"`
 
-	// Heartbeat configures liveness pings to openviking-server.
+	// Heartbeat configures liveness pings to ctxhub-server.
 	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
 
 	// Cron configures the periodic scheduler.
@@ -59,7 +59,7 @@ type Config struct {
 	// OTEL configures bot-side tracing/logging.
 	OTEL OTELConfig `mapstructure:"otel"`
 
-	// Ovmount configures the HTTP client to openviking-server.
+	// Ovmount configures the HTTP client to ctxhub-server.
 	Ovmount OvmountConfig `mapstructure:"ovmount"`
 
 	// Langfuse configures the optional Langfuse HTTP integration.
@@ -130,7 +130,7 @@ type ProviderConfig struct {
 // AgentConfig configures the agent loop. Most knobs live under
 // Provider; this section is reserved for future per-agent overrides.
 type AgentConfig struct {
-	// MCPURL is the openviking-server MCP endpoint, e.g.
+	// MCPURL is the ctxhub-server MCP endpoint, e.g.
 	// https://openviking.example.com/mcp. Required when Enabled is true.
 	MCPURL string `mapstructure:"mcp_url" validate:"required_if=Enabled true"`
 	// MCPBasicUser / MCPBasicPass are optional HTTP Basic credentials
@@ -227,7 +227,7 @@ type OTELConfig struct {
 	LogLevel    string  `mapstructure:"log_level"   validate:"omitempty,oneof=debug info warn warning error"`
 }
 
-// OvmountConfig configures the HTTP client to openviking-server.
+// OvmountConfig configures the HTTP client to ctxhub-server.
 type OvmountConfig struct {
 	// Timeout is the HTTP client timeout in seconds.
 	Timeout int `mapstructure:"timeout"`

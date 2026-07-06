@@ -62,7 +62,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("oauth.issuer", "")
 
 	v.SetDefault("otel.exporter", "memory")
-	v.SetDefault("otel.service_name", "openviking-server")
+	v.SetDefault("otel.service_name", "ctxhub-server")
 	v.SetDefault("otel.sample_rate", 1.0)
 	v.SetDefault("otel.log_level", "info")
 

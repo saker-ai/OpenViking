@@ -1,4 +1,4 @@
-// Package routers contains the HTTP routers exposed by openviking-server.
+// Package routers contains the HTTP routers exposed by ctxhub-server.
 // Each router is registered onto the /api/v1 group by its own Register<Name>
 // function; concrete handler logic lives in the corresponding file.
 //

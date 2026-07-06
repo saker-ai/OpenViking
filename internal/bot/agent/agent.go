@@ -90,7 +90,7 @@ func (a *Agent) Handle(ctx context.Context, msg channels.IncomingMessage) (strin
 	}
 
 	// Span the whole agent turn so the bot's traces line up with
-	// server-side spans (the openviking-server receives the
+	// server-side spans (the ctxhub-server receives the
 	// X-OpenViking-* headers via ovmount).
 	if a.obs != nil {
 		var end func(error)

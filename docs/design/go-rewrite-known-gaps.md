@@ -100,15 +100,15 @@
 | 实现内容（components） | 三个网络无关的具体实现供测试与 bootstrap：`ListCaseLoader`（固定 case 列表，带 batch size + Reset）、`ContentHashPolicySnapshotter`（sha256 内容哈希，同内容同 ID 便于 eval 复用）、`DryRunPolicyUpdater`（记录 plan 不写盘，从 plan items 抽 WrittenURIs/DeletedURIs）。 |
 | 实现内容（gradients） | `PatchSemanticGradient` + `MemoryFile` + `TargetName`/`TargetURI` 辅助方法。TargetName 解析顺序：`experience_name` → `name` → `<memory_type_singular>_name` → URI slug → "unknown_policy"，与 Python 实现一致。 |
 | 已知妥协 | 重 LLM 组件（`SingleTurnLLMRolloutExecutor`/`ExperienceGradientEstimator`/`TrajectoryRolloutAnalyzer`/`PatchMergePolicyOptimizer`/`MemoryFilePolicyUpdater`/`SessionCommitPolicyTrainer`/`SkillPolicyUpdater` 等）未实现 —— 它们需要 LLM 客户端、prompt 工程、storage adapter，运营方按需注入。`PolicySet.lock()`/`reload()` 未实现 —— Python 版依赖 VikingFS 事务锁，Go 版未引入 storage 包，调用方自行串行化。`RemoteBatchRunner`（远程 benchmark 服务调用）未实现 —— HTTP 表面假设与 Python `AsyncHTTPClient` 不同，按需补。 |
-| 后续动作 | （a）LLM 组件按需补：从 `internal/eval/` 评估框架接 `RolloutAnalyzer`；（b）`PolicySet` 接 `internal/session/memory/` 的 MemoryUpdater 实现 `reload()`；（c）`RemoteBatchRunner` 接入 openviking-server benchmark endpoint。 |
+| 后续动作 | （a）LLM 组件按需补：从 `internal/eval/` 评估框架接 `RolloutAnalyzer`；（b）`PolicySet` 接 `internal/session/memory/` 的 MemoryUpdater 实现 `reload()`；（c）`RemoteBatchRunner` 接入 ctxhub-server benchmark endpoint。 |
 | 测试 | train 包 21 测试用例（含 4 子例）：`BatchTrainEvalConfig_Validate`（5 子例）/`WithDefaults`/`ListCaseLoader_Batches`/`ListCaseLoader_DefaultBatchSize`/`ContentHashSnapshotter_Deterministic`/`DryRunUpdater_RecordsPlan`/`PatchSemanticGradient_TargetName`（4 子例）/`PatchSemanticGradient_TargetURI`/`Pipeline_TrainEndToEnd`/`Pipeline_TrainMultipleEpochs`/`Pipeline_TrainHookStopsEarly`/`Pipeline_EvalEndToEnd`/`Pipeline_TrainFromRollouts`/`Pipeline_TrainFromRollouts_WithCustomTrainer`/`Pipeline_MissingComponents`/`Pipeline_ExecuteErrorPropagates`/`Pipeline_AnalyzeErrorPropagates`/`Pipeline_CtxCanceled`/`LocalBatchRunner_EndToEnd`/`RunBatchTrainEval_NilRunner`/`RunBatchTrainEval_InvalidConfig`/`Semaphore_AcquireRelease`/`NoopLifecycleHook`，全过 `-race`。 |
 
 ### 1.8 vectordb/vectorize 独立服务（已补完）
 
 | 维度 | 内容 |
 |---|---|
-| 当前实现 | `internal/vectorize/vectorize.go`（150 行，批量管线核心）+ `cmd/openviking-vectorize/main.go`（110 行，CLI 入口） |
-| CLI 二进制 | `openviking-vectorize --config ov.conf --input docs.jsonl --collection my-docs --batch-size 64`；flags：`--input`（`-` = stdin）、`--collection`（必需）、`--batch-size`（默认 64）、`--dimension`、`--distance`（cosine/l2/ip）、`--model`、`--version` |
+| 当前实现 | `internal/vectorize/vectorize.go`（150 行，批量管线核心）+ `cmd/ctxhub-vectorize/main.go`（110 行，CLI 入口） |
+| CLI 二进制 | `ctxhub-vectorize --config ov.conf --input docs.jsonl --collection my-docs --batch-size 64`；flags：`--input`（`-` = stdin）、`--collection`（必需）、`--batch-size`（默认 64）、`--dimension`、`--distance`（cosine/l2/ip）、`--model`、`--version` |
 | 管线流程 | 读 JSONL（每行 `{id, text, metadata}`）→ 跳过空行 → 解析+校验 ID 非空 → 累积到 batch → 调 `embedder.Embed(texts, model)` → 校验向量数 == text 数 → `coll.EnsureCollection` (首次) → `coll.Upsert(vectors)` → flush 剩余 → 报告 Stats |
 | 配置加载 | 复用 `config.Load(cfgPath)` 加载 ov.conf（与 server 同配置）；embedder provider 从 `cfg.Embedder` 取（openai/volcengine/dashscope/local/litellm）；vectordb backend 从 `cfg.VectorDB.Backend` 取（memory/local/qdrant/opengauss/volcengine/vikingdb/http） |
 | 触发闭环项 | P1 #1（vikingdb SDK）+ P3-3（2026-07-05） |
@@ -171,12 +171,12 @@
 |---|---|
 | 当前实现 | `tests/e2e/local_server_test.go`（build tag `e2e`）+ `examples/ov.conf.local-memory` + `scripts/e2e-smoke.sh` |
 | Python 对照 | `tests/integration/test_full_workflow.py`（AsyncOpenViking 客户端 E2E：add_resource → wait_processed → find → read） |
-| 已补完（2026-07-05） | (a) 层 2 Go E2E：起 openviking-server 子进程 → /healthz → PUT /api/v1/content → GET /api/v1/content → POST /api/v1/search 全闭环；(b) `examples/ov.conf.local-memory`：内存 vectordb + 本地 hash embedder + 内存 ragfs + 内存 queue，零外部依赖；(c) `scripts/e2e-smoke.sh`：L0 单测 + L1 二进制冒烟（6 个二进制）+ L2 E2E + L6 训练流水线 E2E，按层短路 |
+| 已补完（2026-07-05） | (a) 层 2 Go E2E：起 ctxhub-server 子进程 → /healthz → PUT /api/v1/content → GET /api/v1/content → POST /api/v1/search 全闭环；(b) `examples/ov.conf.local-memory`：内存 vectordb + 本地 hash embedder + 内存 ragfs + 内存 queue，零外部依赖；(c) `scripts/e2e-smoke.sh`：L0 单测 + L1 二进制冒烟（6 个二进制）+ L2 E2E + L6 训练流水线 E2E，按层短路 |
 | 顺带修复 | `newVLM(cfg)` 在 `cfg.Provider == ""` 时返回 `nil` 而非 `vlm.NewStub()`。stub 的 Chat 返回 `ErrUnsupported`，导致未配置 VLM 时 `/api/v1/search` 必 500。改为 nil 后，`VLMIntentAnalyzer.Analyze` 走 nil-safe 路径返回 no-op intent，搜索降级为 sparse-only 关键字匹配。`VLMIntentAnalyzer.Analyze` 的 nil-check 已存在（intent.go:51-53），仅 `newVLM` 默认分支返错。 |
 | 触发闭环项 | 用户问题"怎么真实端到端测试核心功能"（2026-07-05） |
 | 影响 | (a) 新部署可用 `scripts/e2e-smoke.sh` 在 30 秒内验证 6 个二进制 + HTTP 闭环 + 训练流水线；(b) 未配置 VLM 的本地部署也能跑 search（关键字匹配），不再 500。 |
 | 测试 | `tests/e2e/`：2 个测试（`TestLocalServer_AddSearchRead` + `TestLocalServer_Health`），`-race` 零 WARNING，只在 `-tags=e2e` 下运行（不污染标准基线）。 |
-| 已知妥协 | L3（真实 Qdrant+LLM）/L4（bot OpenAPI 通道）/L5（openviking-vectorize JSONL→Qdrant）三层 harness 在脚本中标注为 deferred，需真实外部服务，留作后续迭代。 |
+| 已知妥协 | L3（真实 Qdrant+LLM）/L4（bot OpenAPI 通道）/L5（ctxhub-vectorize JSONL→Qdrant）三层 harness 在脚本中标注为 deferred，需真实外部服务，留作后续迭代。 |
 | 后续动作 | 视用户反馈补 L3/L4/L5 harness；L3 的配置已 wired（`OV_E2E_REAL=1` + `OV_EMBEDDER_API_KEY`），只缺断言逻辑。 |
 
 ### 1.14 Go SDK 兼容别名（sdk/go 全量端到端打通）（已补完）

@@ -244,7 +244,7 @@ type StoredLink struct {
 // BatchTrainEvalConfig configures one remote benchmark batch train/eval
 // run. Mirrors the Python BatchTrainEvalConfig dataclass field-for-field
 // (with Go-idiomatic naming). The orchestrator interprets these fields
-// when calling a remote openviking-server benchmark endpoint.
+// when calling a remote ctxhub-server benchmark endpoint.
 type BatchTrainEvalConfig struct {
 	Domain                     string
 	Dataset                    string

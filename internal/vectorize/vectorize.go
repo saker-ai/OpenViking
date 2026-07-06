@@ -1,5 +1,5 @@
 // Package vectorize implements the offline batch vectorization pipeline
-// exposed by the openviking-vectorize binary. It reads JSONL records
+// exposed by the ctxhub-vectorize binary. It reads JSONL records
 // (one {id, text, metadata} per line), batches them through an
 // embedder.Embedder, and upserts the resulting vectors into a
 // vectordb.CollectionAdapter.

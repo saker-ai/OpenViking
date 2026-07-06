@@ -1,4 +1,4 @@
-// Package doctor builds the openviking-doctor CLI: a diagnostic tool that
+// Package doctor builds the ctxhub-doctor CLI: a diagnostic tool that
 // inspects config, connectivity (ragfs / vectordb / queuefs / embedder),
 // permissions, and disk health, and prints a structured report.
 //
@@ -34,13 +34,13 @@ const defaultProbeTimeout = 5 * time.Second
 // configSections is the canonical section list the config probe reports on.
 var configSections = []string{"server", "vectordb", "embedder", "rerank", "vlm", "queuefs", "ragfs"}
 
-// NewRoot returns the openviking-doctor CLI root command. Invoking it with
+// NewRoot returns the ctxhub-doctor CLI root command. Invoking it with
 // no subcommand runs `all`.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "openviking-doctor",
+		Use:           "ctxhub-doctor",
 		Short:         "OpenViking diagnostic tool",
-		Long:          "openviking-doctor inspects config, connectivity, permissions, and disk health.",
+		Long:          "ctxhub-doctor inspects config, connectivity, permissions, and disk health.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version.Version,
@@ -56,8 +56,8 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(connectivityCmd())
 	root.AddCommand(diskCmd())
 	root.AddCommand(allCmd())
-	// Root also accepts the common flags so `openviking-doctor --json` and
-	// `openviking-doctor --config PATH` work as shorthand for `all`.
+	// Root also accepts the common flags so `ctxhub-doctor --json` and
+	// `ctxhub-doctor --config PATH` work as shorthand for `all`.
 	commonFlags(root)
 	return root
 }
@@ -65,7 +65,7 @@ func NewRoot() *cobra.Command {
 func versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Print openviking-doctor version",
+		Short: "Print ctxhub-doctor version",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintln(cmd.OutOrStdout(), version.String())
 			return nil

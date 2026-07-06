@@ -1,11 +1,11 @@
 // Package bot hosts the vikingbot CLI plus the HTTP gateway that bridges
-// the openviking-server /bot/v1 surface to the multi-channel runtime.
+// the ctxhub-server /bot/v1 surface to the multi-channel runtime.
 //
 // Gateway is the HTTP boundary implemented by NewGateway. It satisfies
 // routers.BotService (six gin handlers) without importing the routers
 // package — Go's structural typing wires it in app.go via deps.Bot =
 // bot.NewGateway(). Per-channel adapters (ChannelAdapter) and an
-// optional SessionStore are injected by callers (cmd/openviking-server)
+// optional SessionStore are injected by callers (cmd/ctxhub-server)
 // so the gateway starts with no channels and still serves /bot/v1/health.
 package bot
 
@@ -67,7 +67,7 @@ type SessionSummary struct {
 // When no channels are configured the gateway still serves /bot/v1/*:
 // Health and ListChannels return 200 with an empty channel set, while
 // per-channel routes (HandleWebhook, SendMessage) return 404 for the
-// unknown channel. This lets openviking-server boot end-to-end without
+// unknown channel. This lets ctxhub-server boot end-to-end without
 // a configured bot runtime.
 type Gateway struct {
 	mu       sync.RWMutex

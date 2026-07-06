@@ -1,4 +1,4 @@
-// Package heartbeat pings openviking-server periodically to signal
+// Package heartbeat pings ctxhub-server periodically to signal
 // that the bot is alive. The ping target is /api/v1/observer (the
 // observer router on the server side), and the body carries the bot's
 // identity and channel list so the server can surface bot health in
@@ -49,7 +49,7 @@ type Heartbeat struct {
 // New returns a Heartbeat that pings pinger (or httpPinger when nil)
 // every cfg.Interval seconds. When interval is 0 the loop is disabled.
 //
-// serverURL is the base URL of the openviking-server (e.g.
+// serverURL is the base URL of the ctxhub-server (e.g.
 // https://openviking.example.com). It is only used by the default
 // httpPinger; a custom pinger ignores it.
 func New(cfg config.HeartbeatConfig, serverURL string, identity Payload, pinger Pinger) *Heartbeat {
@@ -108,7 +108,7 @@ func (h *Heartbeat) Stop() {
 }
 
 // httpPinger POSTs the payload as JSON to the configured path on the
-// openviking-server.
+// ctxhub-server.
 type httpPinger struct {
 	serverURL string
 	path      string

@@ -1,4 +1,4 @@
-// Package doctor builds the openviking-doctor CLI: a diagnostic tool that
+// Package doctor builds the ctxhub-doctor CLI: a diagnostic tool that
 // inspects config, connectivity (ragfs / vectordb / queuefs / embedder),
 // permissions, and disk health, and prints a structured report.
 //
@@ -67,7 +67,7 @@ func (r *Report) Failed() bool {
 
 // Print writes a human-readable report to w.
 func (r *Report) Print(w io.Writer) {
-	fmt.Fprintf(w, "openviking-doctor %s\n", r.Command)
+	fmt.Fprintf(w, "ctxhub-doctor %s\n", r.Command)
 	fmt.Fprintf(w, "started: %s\n", r.StartedAt.Format(time.RFC3339))
 	for _, p := range r.Results {
 		fmt.Fprintf(w, "  [%s] %s", strings.ToUpper(string(p.Status)), p.Name)

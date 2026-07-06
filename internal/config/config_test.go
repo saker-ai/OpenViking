@@ -23,7 +23,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, "memory", cfg.RAGFS.Cache.Provider)
 	assert.Equal(t, "argon2id", cfg.Auth.APIKey.HashAlgo)
 	assert.Equal(t, "memory", cfg.OTEL.Exporter)
-	assert.Equal(t, "openviking-server", cfg.OTEL.ServiceName)
+	assert.Equal(t, "ctxhub-server", cfg.OTEL.ServiceName)
 	assert.Equal(t, 1.0, cfg.OTEL.SampleRate)
 }
 

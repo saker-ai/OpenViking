@@ -1,4 +1,4 @@
-// Package migrate builds the openviking-migrate CLI: schema migrations
+// Package migrate builds the ctxhub-migrate CLI: schema migrations
 // for ragfs / vectordb / queuefs and the Python -> Go data bridge.
 //
 // This file implements the SQL migration runner used by `migrate ragfs`.

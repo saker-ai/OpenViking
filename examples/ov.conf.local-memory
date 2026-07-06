@@ -9,7 +9,7 @@
 # similarity must configure a sidecar URL (OV_EMBEDDER_API_BASE).
 #
 # Usage:
-#   ./bin/openviking-server --config examples/ov.conf.local-memory
+#   ./bin/ctxhub-server --config examples/ov.conf.local-memory
 #   curl -fsS http://127.0.0.1:1933/health
 
 server:
@@ -54,7 +54,7 @@ oauth:
 
 otel:
   exporter: memory
-  service_name: "openviking-server-e2e"
+  service_name: "ctxhub-server-e2e"
   sample_rate: 1.0
   log_level: info
 

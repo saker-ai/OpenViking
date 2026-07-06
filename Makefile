@@ -4,16 +4,16 @@ GO ?= go
 GOWORK ?= off
 CMD_DIR := cmd
 BIN_DIR := bin
-SERVER := $(BIN_DIR)/openviking-server
-OV := $(BIN_DIR)/ov
-VIKINGBOT := $(BIN_DIR)/vikingbot
-MIGRATE := $(BIN_DIR)/openviking-migrate
-DOCTOR := $(BIN_DIR)/openviking-doctor
+SERVER := $(BIN_DIR)/ctxhub-server
+OV := $(BIN_DIR)/ctxhub-cli
+VIKINGBOT := $(BIN_DIR)/ctxhub-bot
+MIGRATE := $(BIN_DIR)/ctxhub-migrate
+DOCTOR := $(BIN_DIR)/ctxhub-doctor
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-PKG := github.com/volcengine/openviking/internal/version
+PKG := github.com/saker-ai/ctxhub/internal/version
 LDFLAGS := -ldflags="-s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).BuildTime=$(BUILD_TIME)"
 
 GOFLAGS := -trimpath
@@ -39,11 +39,11 @@ all: build
 
 build: web-studio
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(SERVER) ./$(CMD_DIR)/openviking-server
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(OV) ./$(CMD_DIR)/ov
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(VIKINGBOT) ./$(CMD_DIR)/vikingbot
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(MIGRATE) ./$(CMD_DIR)/openviking-migrate
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DOCTOR) ./$(CMD_DIR)/openviking-doctor
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(SERVER) ./$(CMD_DIR)/ctxhub-server
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(OV) ./$(CMD_DIR)/ctxhub-cli
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(VIKINGBOT) ./$(CMD_DIR)/ctxhub-bot
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(MIGRATE) ./$(CMD_DIR)/ctxhub-migrate
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DOCTOR) ./$(CMD_DIR)/ctxhub-doctor
 
 web-studio-install:
 	@if [ -d web-studio ] && [ -f web-studio/package.json ]; then \
@@ -87,7 +87,7 @@ docker:
 	docker build -t openviking:dev .
 
 dev:
-	GOWORK=$(GOWORK) $(GO) run ./$(CMD_DIR)/openviking-server
+	GOWORK=$(GOWORK) $(GO) run ./$(CMD_DIR)/ctxhub-server
 
 # run-server starts the OpenViking server with the local-memory smoke
 # config + web-studio static assets. Use `make run` for the full
@@ -95,7 +95,7 @@ dev:
 # built the frontend and just want the server.
 run-server: web-studio
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) -o $(SERVER) ./$(CMD_DIR)/openviking-server
+	CGO_ENABLED=$(CGO_ENABLED) GOWORK=$(GOWORK) $(GO) build $(GOFLAGS) -o $(SERVER) ./$(CMD_DIR)/ctxhub-server
 	OPENVIKING_WEB_STUDIO_DIR=$(WEB_STUDIO_DIR) $(SERVER) --config $(OV_CONFIG)
 
 # open-browser opens the default browser to the web-access entry point.
@@ -134,7 +134,7 @@ vet:
 
 help:
 	@echo "OpenViking Go monorepo targets:"
-	@echo "  build           - Build all 5 binaries into bin/"
+	@echo "  build           - Build all 6 binaries into bin/"
 	@echo "  run             - Build web-studio + server, start server, open browser to /web-access"
 	@echo "  run-server      - Build web-studio + server, start server (no browser)"
 	@echo "  open-browser    - Open browser to http://127.0.0.1:1933/web-access"

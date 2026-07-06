@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config is the top-level configuration object for openviking-server.
+// Config is the top-level configuration object for ctxhub-server.
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"   validate:"required"`
 	VLM      VLMConfig      `mapstructure:"vlm"`

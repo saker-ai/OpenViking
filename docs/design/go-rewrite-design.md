@@ -108,7 +108,7 @@ OpenViking 是面向 AI Agent 的"上下文数据库"，以**文件系统范式*
 
 | 目标 | 度量 |
 |-----|-----|
-| 单二进制部署 | `openviking-server`、`ov`、`vikingbot` 三个二进制，无 Python/Rust/C++ 依赖 |
+| 单二进制部署 | `ctxhub-server`、`ov`、`vikingbot` 三个二进制，无 Python/Rust/C++ 依赖 |
 | 构建时间 | 冷构建 < 60s（当前混合栈 ~6min） |
 | 启动时间 | < 1s（当前 ~3s 含 Python 解释器 + 扩展加载） |
 | API 兼容 | 现有 `sdk/go`、`sdk/python` 测试套件 100% 通过 |
@@ -226,11 +226,11 @@ OpenViking 是面向 AI Agent 的"上下文数据库"，以**文件系统范式*
 │                       单一 Go 仓库 (monorepo)                       │
 ├────────────────────────────────────────────────────────────────────┤
 │  cmd/                                                              │
-│    openviking-server/   ← FastAPI 等价 HTTP 服务 + MCP + WebDAV     │
+│    ctxhub-server/   ← FastAPI 等价 HTTP 服务 + MCP + WebDAV     │
 │    ov/                  ← ov_cli 等价 CLI + TUI                     │
 │    vikingbot/           ← vikingbot 等价 Bot 进程                    │
-│    openviking-migrate/  ← 数据库/向量库迁移工具                       │
-│    openviking-doctor/   ← 配置/连通性诊断                             │
+│    ctxhub-migrate/  ← 数据库/向量库迁移工具                       │
+│    ctxhub-doctor/   ← 配置/连通性诊断                             │
 ├────────────────────────────────────────────────────────────────────┤
 │  internal/                                                         │
 │    domain/      ← 核心领域模型（Resource/Session/Skill/...）        │
@@ -325,11 +325,11 @@ OpenViking/
 ├── go.sum
 ├── Makefile                       # make build/test/lint/docker
 ├── cmd/
-│   ├── openviking-server/main.go  # HTTP 服务入口
+│   ├── ctxhub-server/main.go  # HTTP 服务入口
 │   ├── ov/main.go                 # CLI 入口
 │   ├── vikingbot/main.go          # Bot 入口
-│   ├── openviking-migrate/main.go # 迁移工具
-│   └── openviking-doctor/main.go  # 诊断工具
+│   ├── ctxhub-migrate/main.go # 迁移工具
+│   └── ctxhub-doctor/main.go  # 诊断工具
 ├── internal/
 │   ├── domain/                    # 领域模型（无外部依赖）
 │   │   ├── resource.go
@@ -600,7 +600,7 @@ type CacheProvider interface {
 |---------|-----|
 | 资源内容变更（写入新版本） | 重新生成 L0/L1，旧版本保留为 `.abstract.{version}.bak` |
 | 资源删除 | 删除隐藏文件 + 向量库级联删除 |
-| VLM 模型版本升级 | 通过 `openviking-migrate reabstract` 批量重生成 |
+| VLM 模型版本升级 | 通过 `ctxhub-migrate reabstract` 批量重生成 |
 | L1 生成失败 | 重试 3 次后降级为 L0 复用，标记 `.overview.fallback=true` |
 
 **Go 实现**：
@@ -1358,7 +1358,7 @@ web-studio: ## 构建 Web Studio
 	cd web-studio && pnpm install && pnpm build
 
 build: web-studio ## 编译 Go 二进制（含 embed 前端）
-	go build -o bin/openviking-server ./cmd/openviking-server
+	go build -o bin/ctxhub-server ./cmd/ctxhub-server
 	go build -o bin/ov ./cmd/ov
 	go build -o bin/vikingbot ./cmd/vikingbot
 ```
@@ -1387,7 +1387,7 @@ func InitTracer(cfg Config) (func(), error) {
     tp := trace.NewTracerProvider(
         trace.WithBatcher(exp),
         trace.WithResource(resource.NewWithAttributes(
-            semconv.ServiceName("openviking-server"),
+            semconv.ServiceName("ctxhub-server"),
             semconv.ServiceVersion(version),
         )),
     )
@@ -1423,7 +1423,7 @@ func InitTracer(cfg Config) (func(), error) {
 所有 `cmd/` 入口均实现 signal-aware 优雅停机，按依赖逆序关闭资源：
 
 ```go
-// cmd/openviking-server/main.go
+// cmd/ctxhub-server/main.go
 func run() error {
     ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
     defer stop()
@@ -1488,7 +1488,7 @@ func (e *AppError) Unwrap() error { return e.Err }
 项目规模适合**手动构造函数注入**，不引入 Wire/Fx 等框架，降低编译期复杂度：
 
 ```go
-// cmd/openviking-server/app.go
+// cmd/ctxhub-server/app.go
 func buildApp(cfg *config.Config) (*server.App, func(), error) {
     // 基础设施层
     dbPool, err := storage.NewPgPool(ctx, cfg.Database)
@@ -2019,7 +2019,7 @@ func TestRedisCache(t *testing.T) {
 
 #### 9.4.1 API E2E
 
-`tests/e2e/api/` 用真实 `openviking-server` 二进制 + testcontainers 后端，覆盖：
+`tests/e2e/api/` 用真实 `ctxhub-server` 二进制 + testcontainers 后端，覆盖：
 
 - 资源接入 → 解析 → embedding → 检索 全链路
 - Session commit → 记忆提取
@@ -2147,12 +2147,12 @@ steps:
 
 | 产物 | 形式 | 发布渠道 | 命名 |
 |-----|------|---------|------|
-| Linux 二进制 | tar.gz | GitHub Release | `openviking-server-linux-amd64.tar.gz` |
-| macOS 二进制 | tar.gz | GitHub Release | `openviking-server-darwin-arm64.tar.gz` |
-| Windows 二进制 | zip | GitHub Release | `openviking-server-windows-amd64.zip` |
-| Docker 镜像 | multi-arch | ghcr.io / Docker Hub | `ghcr.io/volcengine/openviking-server:{version}` |
+| Linux 二进制 | tar.gz | GitHub Release | `ctxhub-server-linux-amd64.tar.gz` |
+| macOS 二进制 | tar.gz | GitHub Release | `ctxhub-server-darwin-arm64.tar.gz` |
+| Windows 二进制 | zip | GitHub Release | `ctxhub-server-windows-amd64.zip` |
+| Docker 镜像 | multi-arch | ghcr.io / Docker Hub | `ghcr.io/volcengine/ctxhub-server:{version}` |
 | Helm Chart | tar.gz | GitHub Release / OCI registry | `openviking-{version}.tgz` |
-| deb/rpm | package | GitHub Release（Linux only） | `openviking-server_{version}_amd64.deb` |
+| deb/rpm | package | GitHub Release（Linux only） | `ctxhub-server_{version}_amd64.deb` |
 | Checksums | txt | GitHub Release | `checksums.txt`（SHA256） |
 | SBOM | spdx-json | GitHub Release | `sbom.spdx.json`（`syft` 生成） |
 
@@ -2188,8 +2188,8 @@ release:
 
 | 形态 | 适用 | 配置 |
 |-----|-----|------|
-| 单二进制 | 个人/小团队 | `openviking-server` + SQLite + local vectordb |
-| Server + Worker | 中型 | `openviking-server` + `asynq worker` + Redis + Qdrant |
+| 单二进制 | 个人/小团队 | `ctxhub-server` + SQLite + local vectordb |
+| Server + Worker | 中型 | `ctxhub-server` + `asynq worker` + Redis + Qdrant |
 | K8s 集群 | 大型/多租户 | Helm chart：server/worker/bot/statefulset（qdrant） |
 
 ### 10.2 Docker
@@ -2207,7 +2207,7 @@ COPY go.* ./
 RUN go mod download
 COPY . .
 COPY --from=web-builder /app/web-studio/dist ./web-studio/dist
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/openviking-server ./cmd/openviking-server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/ctxhub-server ./cmd/ctxhub-server
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/ov ./cmd/ov
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/vikingbot ./cmd/vikingbot
 
@@ -2215,7 +2215,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=go-builder /out/* /usr/local/bin/
 EXPOSE 8080
-ENTRYPOINT ["openviking-server"]
+ENTRYPOINT ["ctxhub-server"]
 ```
 
 ### 10.3 Helm Chart
@@ -2306,7 +2306,7 @@ type Config struct {
 | `oauth.clients` | `OAuth.Clients` | []ClientConfig | — | DCR 注册的客户端 |
 | `otel.exporter` | `OTEL.Exporter` | string | `memory` | memory/otlp-grpc/otlp-http |
 | `otel.endpoint` | `OTEL.Endpoint` | string | — | OTLP 收集器地址 |
-| `otel.service_name` | `OTEL.ServiceName` | string | `openviking-server` | |
+| `otel.service_name` | `OTEL.ServiceName` | string | `ctxhub-server` | |
 | `otel.sample_rate` | `OTEL.SampleRate` | float64 | `1.0` | 0-1 |
 | `bot.enabled` | `Bot.Enabled` | bool | `false` | |
 | `bot.channels` | `Bot.Channels` | map[string]ChannelConfig | — | telegram/feishu/dingtalk/slack/qq |
@@ -2363,9 +2363,9 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 
 | 工具 | 命令 | 用途 |
 |-----|------|------|
-| doctor | `openviking-doctor` | 配置/连通性/模型/向量库健康检查 |
-| migrate | `openviking-migrate` | ovpack 导入、vectordb 后端迁移 |
-| profile | `openviking-server -profile :6060` | pprof |
+| doctor | `ctxhub-doctor` | 配置/连通性/模型/向量库健康检查 |
+| migrate | `ctxhub-migrate` | ovpack 导入、vectordb 后端迁移 |
+| profile | `ctxhub-server -profile :6060` | pprof |
 | shell | `ov shell` | 交互式 ragfs shell |
 
 ---
@@ -2388,7 +2388,7 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 | 数据 | 迁移 |
 |-----|------|
 | ragfs 文件 | 路径与元数据文件 schema 一致，直接读 |
-| 向量库 | 通过 `openviking-migrate` 从现状导出 ovpack → 导入 |
+| 向量库 | 通过 `ctxhub-migrate` 从现状导出 ovpack → 导入 |
 | SQLite cursor/audit | schema 一致，直接读 |
 | 配置 | YAML 字段一致 |
 
@@ -2448,8 +2448,8 @@ api.openviking.ai {
 **冲突避免**：
 
 - 同一 account 不能同时被两个版本写入（网关路由保证）
-- 切流前 Go 版执行 `openviking-migrate sync --from=py --account=acct_001` 全量同步
-- 切流回滚后 Python 版执行 `openviking-migrate sync --from=go --account=acct_001`
+- 切流前 Go 版执行 `ctxhub-migrate sync --from=py --account=acct_001` 全量同步
+- 切流回滚后 Python 版执行 `ctxhub-migrate sync --from=go --account=acct_001`
 
 #### 11.4.3 回滚触发条件与流程
 
@@ -2465,7 +2465,7 @@ api.openviking.ai {
 
 1. 网关切流：`curl admin:8080/route -d 'acct_001=py'`（or 修改 Caddyfile + reload）
 2. Go 版停止接收新请求（graceful shutdown 30s）
-3. 数据反向同步：`openviking-migrate sync --from=go --account=acct_001`
+3. 数据反向同步：`ctxhub-migrate sync --from=go --account=acct_001`
 4. Python 版恢复服务
 5. 事后分析：抓 Go 版日志 + OTel trace + pprof
 
@@ -2513,7 +2513,7 @@ api.openviking.ai {
 1. 默认部署走 qdrant 后端（推荐）
 2. local 后端作为兜底（小数据量 < 10 万向量）
 3. 性能关键场景可选 cgo：`github.com/mnemoe/hnswlib-cgo` 桥接 C++ 实现
-4. 提供 `openviking-doctor vectordb-bench` 工具辅助选型
+4. 提供 `ctxhub-doctor vectordb-bench` 工具辅助选型
 
 ### 12.3 Mooncake / Yuanrong 后端无法直接复用
 

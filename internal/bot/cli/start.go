@@ -234,7 +234,7 @@ func NewChannelsCmd() *cobra.Command {
 }
 
 // NewStatusCmd returns the `vikingbot status` cobra command — pings
-// the configured openviking-server and reports reachability.
+// the configured ctxhub-server and reports reachability.
 func NewStatusCmd() *cobra.Command {
 	var configPath string
 	cmd := &cobra.Command{

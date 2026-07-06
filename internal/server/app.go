@@ -1,7 +1,7 @@
 // Package server wires the OpenViking HTTP service: gin engine, middleware
 // chains, health/readiness, pprof, prometheus, and the full router set.
 //
-// App is the top-level runtime container returned to cmd/openviking-server.
+// App is the top-level runtime container returned to cmd/ctxhub-server.
 // BuildApp constructs it from a *config.Config; the returned cleanup func
 // releases every resource acquired during construction in reverse order.
 package server
@@ -93,7 +93,7 @@ func BuildApp(cfg *config.Config) (*App, func(), error) {
 	auditSink := observability.NewAuditSink()
 	serviceName := cfg.OTEL.ServiceName
 	if serviceName == "" {
-		serviceName = "openviking-server"
+		serviceName = "ctxhub-server"
 	}
 
 	// Middleware chain (order matters — see design doc 7.9.2).
@@ -230,7 +230,7 @@ func BuildApp(cfg *config.Config) (*App, func(), error) {
 	deps.Retrieve = retriever
 
 	// Ingest orchestrator with an empty source registry; sources are
-	// registered by callers (cmd/openviking-server) via orchestrator.Register.
+	// registered by callers (cmd/ctxhub-server) via orchestrator.Register.
 	deps.Ingest = ingest.NewOrchestrator(nil, nil)
 
 	// Parse dispatcher. The package-level registry is populated via the
@@ -311,7 +311,7 @@ func BuildApp(cfg *config.Config) (*App, func(), error) {
 	deps.MCP = mcpSrv
 
 	// Bot gateway. Constructed with no channels by default; channels
-	// are registered by callers (cmd/openviking-server) via
+	// are registered by callers (cmd/ctxhub-server) via
 	// gateway.RegisterChannel. When cfg.Bot.Enabled is false the
 	// gateway is left nil so /bot/v1/* returns 501 UNSUPPORTED
 	// (mirrors the OAuth wiring). When enabled, the gateway still

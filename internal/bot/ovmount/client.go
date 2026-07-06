@@ -1,4 +1,4 @@
-// Package ovmount is the bot's HTTP client to openviking-server. It
+// Package ovmount is the bot's HTTP client to ctxhub-server. It
 // exposes a minimal surface the agent loop needs: list resources,
 // read a resource, search, remember (add memory). The MCP endpoint
 // is the canonical tool path; ovmount is the lower-level HTTP client
@@ -39,7 +39,7 @@ type Client interface {
 }
 
 // HTTPClient is the default Client implementation. It talks to the
-// openviking-server REST API.
+// ctxhub-server REST API.
 type HTTPClient struct {
 	cfg     config.OvmountConfig
 	baseURL string
